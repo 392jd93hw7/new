@@ -99,18 +99,56 @@ export async function searchAnime(query: string): Promise<Anime[]> {
   return items.map(normalizeAnime).filter(a => a.title !== "Untitled anime");
 }
 export async function getAnime(idOrSlug: string): Promise<Anime | null> {
-  const decoded = decodeURIComponent(idOrSlug);
-  const id = decoded.match(/-(\d+)$/)?.[1] || decoded;
-  const paths = [`/api/anime/${encodeURIComponent(id)}`, `/anime/${encodeURIComponent(id)}`, `/api/anime/details/${encodeURIComponent(id)}`, `/anime/details/${encodeURIComponent(id)}`];
+  const decoded = decodeURIComponent(idOrSlug).trim();
+  const match = decoded.match(/-(\\d+)$/);
+  const id = match?.[1] || decoded;
+  const titleQuery = match
+    ? decoded.slice(0, match.index).replace(/-/g, " ")
+    : decoded.replace(/-/g, " ");
+
+  // The API returns its documentation HTML for unsupported paths, so request()
+  // rejects those responses and only returns JSON payloads.
+  const paths = [
+    `/api/anime/details/${encodeURIComponent(id)}`,
+    `/api/anime/${encodeURIComponent(id)}?malId=${encodeURIComponent(id)}`,
+  ];
+
   for (const path of paths) {
     const result = await request(path);
-    if (result && typeof result === "object") {
-      const nested = (result as Record<string, unknown>).data ?? result;
-      if (nested && typeof nested === "object" && !Array.isArray(nested)) return normalizeAnime(nested as Record<string, unknown>);
-    }
+    if (!result || typeof result !== "object") continue;
+
+    const obj = result as Record<string, unknown>;
+    const nested = obj.data ?? obj.anime ?? result;
+    if (!nested || typeof nested !== "object" || Array.isArray(nested)) continue;
+
+    const raw = nested as Record<string, unknown>;
+    if (!first(raw, ["title", "name", "animeTitle", "englishTitle", "romaji"])) continue;
+    const anime = normalizeAnime(raw);
+
+    // Avoid returning an unrelated response for an ID lookup.
+    if (anime.id === id || anime.title !== "Untitled anime") return anime;
   }
-  const catalog = await getCatalog("all");
-  return catalog.find(a => a.id === id || a.slug === decoded || `${a.slug}-${a.id}` === decoded) || null;
+
+  // Confirmed working endpoint: /api/search?q=Bleach
+  if (titleQuery) {
+    const results = await searchAnime(titleQuery);
+    const found = results.find(
+      (anime) =>
+        anime.id === id ||
+        anime.slug === decoded ||
+        `${anime.slug}-${anime.id}` === decoded
+    );
+    if (found) return found;
+  }
+
+  // Numeric ID lookup as a last fallback.
+  if (/^\\d+$/.test(id)) {
+    const results = await searchAnime(id);
+    const found = results.find((anime) => anime.id === id);
+    if (found) return found;
+  }
+
+  return null;
 }
 export async function getEpisodes(idOrSlug: string): Promise<Episode[]> {
   const decoded = decodeURIComponent(idOrSlug);
