@@ -144,6 +144,32 @@ export async function getStream(idOrSlug: string, episode: string): Promise<{ so
   return { sources: [], provider: "unavailable" };
 }
 export async function apiHealth() {
-  const result = await request("/");
-  return { configuredBaseUrl: BASE, reachable: result !== null, hasJsonRoot: result !== null, checkedAt: new Date().toISOString() };
+  const checkedAt = new Date().toISOString();
+
+  try {
+    const response = await fetch(BASE, {
+      method: "GET",
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+      headers: { accept: "application/json, text/html;q=0.9, */*;q=0.8" },
+    });
+    const contentType = response.headers.get("content-type") ?? "";
+
+    return {
+      configuredBaseUrl: BASE,
+      reachable: response.ok,
+      hasJsonRoot:
+        response.ok && contentType.toLowerCase().includes("application/json"),
+      status: response.status,
+      checkedAt,
+    };
+  } catch (error) {
+    return {
+      configuredBaseUrl: BASE,
+      reachable: false,
+      hasJsonRoot: false,
+      error: error instanceof Error ? error.message : "Unknown API error",
+      checkedAt,
+    };
+  }
 }
