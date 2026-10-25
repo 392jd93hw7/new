@@ -1,0 +1,3 @@
+import { getCatalog } from "@/lib/api";import AnimeCard from "@/components/AnimeCard";import {pageMetadata} from "@/lib/seo";
+export const metadata=pageMetadata("Latest Anime Updates","Find the latest anime updates on AnimeHeaven.","/latest");
+export default async function Page(){const items=await getCatalog("latest");return <div className="page-shell simple-page"><p className="eyebrow">FRESH FROM THE FEED</p><h1>Latest updates</h1><p className="page-intro">Recently updated titles from the configured anime API.</p>{items.length?<div className="anime-grid">{items.map(a=><AnimeCard key={a.id} anime={a}/>)}</div>:<div className="empty-note">No latest updates were returned by the API. Configure the matching endpoint in <code>src/lib/api.ts</code>.</div>}</div>}

@@ -1,0 +1,2 @@
+import {NextRequest,NextResponse} from "next/server";import {getCatalog} from "@/lib/api";
+export async function GET(request:NextRequest){const kind=request.nextUrl.searchParams.get("kind");const allowed=["trending","popular","latest","movies","all"] as const;const safe=allowed.includes(kind as typeof allowed[number])?kind as typeof allowed[number]:"all";const data=await getCatalog(safe);return NextResponse.json({data,count:data.length,kind:safe},{headers:{"Cache-Control":"public, s-maxage=120, stale-while-revalidate=300"}});}

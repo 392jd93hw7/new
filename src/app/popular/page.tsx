@@ -1,0 +1,3 @@
+import { getCatalog } from "@/lib/api";import AnimeCard from "@/components/AnimeCard";import {pageMetadata} from "@/lib/seo";
+export const metadata=pageMetadata("Popular Anime","Browse popular anime on AnimeHeaven.","/popular");
+export default async function Page(){const items=await getCatalog("popular");return <div className="page-shell simple-page"><p className="eyebrow">FAN FAVORITES</p><h1>Popular anime</h1><p className="page-intro">Explore series fans keep coming back to.</p>{items.length?<div className="anime-grid">{items.map(a=><AnimeCard key={a.id} anime={a}/>)}</div>:<div className="empty-note">No popular anime list returned by the API yet.</div>}</div>}

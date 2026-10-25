@@ -1,0 +1,3 @@
+import { getCatalog } from "@/lib/api";import AnimeCard from "@/components/AnimeCard";import {pageMetadata} from "@/lib/seo";
+export const metadata=pageMetadata("Anime Movies","Discover anime movies on AnimeHeaven.","/movies");
+export default async function Page(){const items=await getCatalog("movies");return <div className="page-shell simple-page"><p className="eyebrow">FEATURE-LENGTH STORIES</p><h1>Anime movies</h1><p className="page-intro">Discover anime movies from the available catalog.</p>{items.length?<div className="anime-grid">{items.map(a=><AnimeCard key={a.id} anime={a}/>)}</div>:<div className="empty-note">The configured API did not return a movie list. If it uses filters rather than a dedicated movies endpoint, update the adapter.</div>}</div>}

@@ -1,0 +1,4 @@
+import Link from "next/link";import {pageMetadata} from "@/lib/seo";
+export const metadata=pageMetadata("Anime Genres","Browse anime by genre on AnimeHeaven.","/genres");
+const genres=["Action","Adventure","Comedy","Drama","Fantasy","Horror","Mystery","Romance","Sci-Fi","Slice of Life","Sports","Supernatural","Thriller"];
+export default function Page(){return <div className="page-shell simple-page"><p className="eyebrow">FIND YOUR VIBE</p><h1>Explore genres</h1><p className="page-intro">Choose a genre to explore matching anime. Results depend on the upstream API's genre support.</p><div className="genre-tiles">{genres.map((g,i)=><Link key={g} href={`/genres/${g.toLowerCase().replace(/[^a-z0-9]+/g,"-")}`} className={`genre-tile genre-${i%6}`}><span>{["⚔","✦","☻","◈","✧","♡"][i%6]}</span><strong>{g}</strong><small>Browse genre ↗</small></Link>)}</div></div>}

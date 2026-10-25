@@ -1,0 +1,3 @@
+import { getCatalog } from "@/lib/api";import AnimeCard from "@/components/AnimeCard";import {pageMetadata} from "@/lib/seo";
+export const metadata=pageMetadata("Trending Anime","Explore anime currently trending on AnimeHeaven.","/trending");
+export default async function Page(){const items=await getCatalog("trending");return <div className="page-shell simple-page"><p className="eyebrow">WHAT EVERYONE IS WATCHING</p><h1>Trending anime</h1><p className="page-intro">Popular stories to add to your watchlist.</p>{items.length?<div className="anime-grid">{items.map(a=><AnimeCard key={a.id} anime={a}/>)}</div>:<div className="empty-note">No trending list returned. Confirm the upstream API endpoint in <code>src/lib/api.ts</code>.</div>}</div>}

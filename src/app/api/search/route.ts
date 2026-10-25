@@ -1,0 +1,2 @@
+import {NextRequest,NextResponse} from "next/server";import {searchAnime} from "@/lib/api";
+export async function GET(request:NextRequest){const q=(request.nextUrl.searchParams.get("q")||"").trim();if(!q)return NextResponse.json({data:[],count:0});if(q.length>100)return NextResponse.json({error:"Search query too long"}, {status:400});const data=await searchAnime(q);return NextResponse.json({data,count:data.length},{headers:{"Cache-Control":"public, s-maxage=60, stale-while-revalidate=120"}});}
