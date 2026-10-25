@@ -100,7 +100,7 @@ export async function searchAnime(query: string): Promise<Anime[]> {
 }
 export async function getAnime(idOrSlug: string): Promise<Anime | null> {
   const decoded = decodeURIComponent(idOrSlug).trim();
-  const match = decoded.match(/-(\\d+)$/);
+  const match = decoded.match(/-(\d+)$/);
   const id = match?.[1] || decoded;
   const titleQuery = match
     ? decoded.slice(0, match.index).replace(/-/g, " ")
@@ -142,7 +142,7 @@ export async function getAnime(idOrSlug: string): Promise<Anime | null> {
   }
 
   // Numeric ID lookup as a last fallback.
-  if (/^\\d+$/.test(id)) {
+  if (/^\d+$/.test(id)) {
     const results = await searchAnime(id);
     const found = results.find((anime) => anime.id === id);
     if (found) return found;
