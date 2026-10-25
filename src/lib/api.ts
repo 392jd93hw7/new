@@ -100,63 +100,75 @@ export async function searchAnime(query: string): Promise<Anime[]> {
 }
 export async function getAnime(idOrSlug: string): Promise<Anime | null> {
   const decoded = decodeURIComponent(idOrSlug).trim();
-  const match = decoded.match(/-(\d+)$/);
+  const match = decoded.match(/-(\\d+)$/);
   const id = match?.[1] || decoded;
   const titleQuery = match
     ? decoded.slice(0, match.index).replace(/-/g, " ")
     : decoded.replace(/-/g, " ");
 
-  // The API returns its documentation HTML for unsupported paths, so request()
-  // rejects those responses and only returns JSON payloads.
-  const paths = [
-    `/api/anime/details/${encodeURIComponent(id)}`,
-    `/api/anime/${encodeURIComponent(id)}?malId=${encodeURIComponent(id)}`,
+  // The upstream API requires the malId query parameter. Unknown paths return
+  // its HTML docs page with HTTP 200, which request() correctly rejects.
+  const detailPaths = [
+    `/api/anime?malId=${encodeURIComponent(id)}`,
+    `/api/anime?mal_id=${encodeURIComponent(id)}`,
   ];
-
-  for (const path of paths) {
+  for (const path of detailPaths) {
     const result = await request(path);
     if (!result || typeof result !== "object") continue;
-
     const obj = result as Record<string, unknown>;
     const nested = obj.data ?? obj.anime ?? result;
     if (!nested || typeof nested !== "object" || Array.isArray(nested)) continue;
-
     const raw = nested as Record<string, unknown>;
-    if (!first(raw, ["title", "name", "animeTitle", "englishTitle", "romaji"])) continue;
-    const anime = normalizeAnime(raw);
-
-    // Avoid returning an unrelated response for an ID lookup.
-    if (anime.id === id || anime.title !== "Untitled anime") return anime;
+    if (first(raw, ["title", "name", "animeTitle", "englishTitle", "romaji"])) {
+      return normalizeAnime(raw);
+    }
   }
 
-  // Confirmed working endpoint: /api/search?q=Bleach
+  // Search is a confirmed JSON endpoint. Use it to recover metadata when a
+  // detail response is unavailable, and match by the route ID or title.
   if (titleQuery) {
     const results = await searchAnime(titleQuery);
     const found = results.find(
       (anime) =>
         anime.id === id ||
         anime.slug === decoded ||
-        `${anime.slug}-${anime.id}` === decoded
+        `${anime.slug}-${anime.id}` === decoded ||
+        anime.title.toLowerCase() === titleQuery.toLowerCase()
     );
     if (found) return found;
   }
 
-  // Numeric ID lookup as a last fallback.
-  if (/^\d+$/.test(id)) {
+  if (/^\\d+$/.test(id)) {
     const results = await searchAnime(id);
     const found = results.find((anime) => anime.id === id);
     if (found) return found;
   }
-
   return null;
 }
 export async function getEpisodes(idOrSlug: string): Promise<Episode[]> {
-  const decoded = decodeURIComponent(idOrSlug);
-  const id = decoded.match(/-(\d+)$/)?.[1] || decoded;
-  const paths = [`/api/anime/${encodeURIComponent(id)}/episodes`, `/anime/${encodeURIComponent(id)}/episodes`, `/api/episodes/${encodeURIComponent(id)}`, `/episodes/${encodeURIComponent(id)}`];
+  const decoded = decodeURIComponent(idOrSlug).trim();
+  const id = decoded.match(/-(\\d+)$/)?.[1] || decoded;
+  const paths = [
+    `/api/episodes?malId=${encodeURIComponent(id)}`,
+    `/api/episodes?mal_id=${encodeURIComponent(id)}`,
+    `/api/anime?malId=${encodeURIComponent(id)}`,
+    `/api/anime/${encodeURIComponent(id)}/episodes`,
+    `/api/episodes/${encodeURIComponent(id)}`,
+  ];
   for (const path of paths) {
-    const items = records(await request(path));
+    const result = await request(path);
+    const items = records(result);
     if (items.length) return items.map(normalizeEpisode);
+
+    // Some detail APIs include episode records inside the anime object.
+    if (result && typeof result === "object") {
+      const obj = result as Record<string, unknown>;
+      const nested = obj.data ?? obj.anime ?? result;
+      if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+        const episodes = records((nested as Record<string, unknown>).episodes);
+        if (episodes.length) return episodes.map(normalizeEpisode);
+      }
+    }
   }
   return [];
 }
