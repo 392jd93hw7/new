@@ -100,47 +100,49 @@ export async function searchAnime(query: string): Promise<Anime[]> {
 }
 export async function getAnime(idOrSlug: string): Promise<Anime | null> {
   const decoded = decodeURIComponent(idOrSlug).trim();
-  const match = decoded.match(/-(\d+)$/);
-  const id = match?.[1] || decoded;
-  const titleQuery = match
-    ? decoded.slice(0, match.index).replace(/-/g, " ")
-    : decoded.replace(/-/g, " ");
+  // Route slugs may be either "bleach-269" or a generated fallback such as
+  // "bleach-bleach-0" when the upstream search item has no recognized ID field.
+  const numericMatch = decoded.match(/-(\\d+)$/);
+  const id = numericMatch?.[1] || decoded;
+  let titleQuery = numericMatch
+    ? decoded.slice(0, numericMatch.index).replace(/-/g, " ")
+    : decoded.replace(/-\\d+$/, "").replace(/-/g, " ");
 
-  // The upstream API requires the malId query parameter. Unknown paths return
-  // its HTML docs page with HTTP 200, which request() correctly rejects.
-  const detailPaths = [
-    `/api/anime?malId=${encodeURIComponent(id)}`,
-    `/api/anime?mal_id=${encodeURIComponent(id)}`,
-  ];
-  for (const path of detailPaths) {
-    const result = await request(path);
-    if (!result || typeof result !== "object") continue;
-    const obj = result as Record<string, unknown>;
-    const nested = obj.data ?? obj.anime ?? result;
-    if (!nested || typeof nested !== "object" || Array.isArray(nested)) continue;
-    const raw = nested as Record<string, unknown>;
-    if (first(raw, ["title", "name", "animeTitle", "englishTitle", "romaji"])) {
-      return normalizeAnime(raw);
+  // Collapse repeated title fragments caused by generated slugs like
+  // "bleach-bleach-0" and discard a trailing numeric list index.
+  titleQuery = titleQuery.replace(/\\s+\\d+$/, "").trim();
+  const words = titleQuery.split(/\\s+/).filter(Boolean);
+  if (words.length > 1 && words.slice(0, Math.floor(words.length / 2)).join(" ") === words.slice(Math.floor(words.length / 2)).join(" ")) {
+    titleQuery = words.slice(0, Math.floor(words.length / 2)).join(" ");
+  }
+
+  if (numericMatch) {
+    for (const path of [
+      `/api/anime?malId=${encodeURIComponent(id)}`,
+      `/api/anime?mal_id=${encodeURIComponent(id)}`,
+    ]) {
+      const result = await request(path);
+      if (!result || typeof result !== "object") continue;
+      const obj = result as Record<string, unknown>;
+      const nested = obj.data ?? obj.anime ?? result;
+      if (!nested || typeof nested !== "object" || Array.isArray(nested)) continue;
+      const raw = nested as Record<string, unknown>;
+      if (first(raw, ["title", "name", "animeTitle", "englishTitle", "romaji"])) return normalizeAnime(raw);
     }
   }
 
-  // Search is a confirmed JSON endpoint. Use it to recover metadata when a
-  // detail response is unavailable, and match by the route ID or title.
-  if (titleQuery) {
-    const results = await searchAnime(titleQuery);
-    const found = results.find(
-      (anime) =>
-        anime.id === id ||
-        anime.slug === decoded ||
-        `${anime.slug}-${anime.id}` === decoded ||
-        anime.title.toLowerCase() === titleQuery.toLowerCase()
+  // Search is the known-working endpoint; use title matching when a route ID
+  // is absent or the detail endpoint does not return a usable record.
+  for (const query of [...new Set([titleQuery, titleQuery.split(" ").slice(0, Math.ceil(titleQuery.split(" ").length / 2)).join(" ")])]) {
+    if (!query) continue;
+    const results = await searchAnime(query);
+    const found = results.find((anime) =>
+      (numericMatch && anime.id === id) ||
+      anime.slug === decoded ||
+      `${anime.slug}-${anime.id}` === decoded ||
+      anime.title.toLowerCase() === query.toLowerCase() ||
+      anime.slug === slugify(query)
     );
-    if (found) return found;
-  }
-
-  if (/^\d+$/.test(id)) {
-    const results = await searchAnime(id);
-    const found = results.find((anime) => anime.id === id);
     if (found) return found;
   }
   return null;
