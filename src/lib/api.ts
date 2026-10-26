@@ -100,7 +100,7 @@ export async function searchAnime(query: string): Promise<Anime[]> {
 }
 export async function getAnime(idOrSlug: string): Promise<Anime | null> {
   const decoded = decodeURIComponent(idOrSlug).trim();
-  const match = decoded.match(/-(\\d+)$/);
+  const match = decoded.match(/-(\d+)$/);
   const id = match?.[1] || decoded;
   const titleQuery = match
     ? decoded.slice(0, match.index).replace(/-/g, " ")
@@ -138,7 +138,7 @@ export async function getAnime(idOrSlug: string): Promise<Anime | null> {
     if (found) return found;
   }
 
-  if (/^\\d+$/.test(id)) {
+  if (/^\d+$/.test(id)) {
     const results = await searchAnime(id);
     const found = results.find((anime) => anime.id === id);
     if (found) return found;
@@ -147,7 +147,7 @@ export async function getAnime(idOrSlug: string): Promise<Anime | null> {
 }
 export async function getEpisodes(idOrSlug: string): Promise<Episode[]> {
   const decoded = decodeURIComponent(idOrSlug).trim();
-  const id = decoded.match(/-(\\d+)$/)?.[1] || decoded;
+  const id = decoded.match(/-(\d+)$/)?.[1] || decoded;
   const paths = [
     `/api/episodes?malId=${encodeURIComponent(id)}`,
     `/api/episodes?mal_id=${encodeURIComponent(id)}`,
