@@ -192,25 +192,47 @@ export async function getStream(
     { provider: "Anikoto", path: `/api/watch/anikoto/${encodeURIComponent(id)}/${ep}/${type}${server}` },
   ];
 
+  const isPlayableMedia = (url: string, keyOrType: string) => {
+    if (!/^https?:\\/\\//i.test(url) || /embed|iframe/i.test(keyOrType + " " + url)) return false;
+    // Never treat an ordinary webpage as a video. Accept HLS playlists and
+    // direct media files only; many providers return an embed page alongside them.
+    return /\\.m3u8(?:[?#]|$)|\\.(?:mp4|m4v|webm|mov)(?:[?#]|$)/i.test(url)
+      || /hlsproxyurl|m3u8|hlsurl/i.test(keyOrType);
+  };
+
   for (const item of paths) {
     const data = await request(item.path);
     if (!data || typeof data !== "object") continue;
     const obj = data as Record<string, unknown>;
     const raw = records(data);
-    const urls = raw.map((v) => ({
-      name: textValue(first(v, ["name", "server", "label"]), item.provider),
-      url: textValue(first(v, ["hlsProxyUrl", "m3u8", "hlsUrl", "url", "src", "file", "streamUrl"]), ""),
-      type: textValue(first(v, ["type", "playbackMode"]), "hls"),
-    })).filter((v) => /^https?:\/\//i.test(v.url) && !/embed/i.test(v.type) && !/embed|iframe/i.test(v.url));
+    const urls = raw.flatMap((v) => {
+      const candidates = [
+        ["hlsProxyUrl", v.hlsProxyUrl],
+        ["m3u8", v.m3u8],
+        ["hlsUrl", v.hlsUrl],
+        ["url", v.url],
+        ["src", v.src],
+        ["file", v.file],
+        ["streamUrl", v.streamUrl],
+      ] as const;
+      return candidates.flatMap(([key, value]) => {
+        const url = textValue(value, "");
+        if (!url || !isPlayableMedia(url, key + " " + textValue(first(v, ["type", "playbackMode"]), ""))) return [];
+        return [{
+          name: textValue(first(v, ["name", "server", "label"]), item.provider),
+          url,
+          type: /m3u8|hls/i.test(key) || /\\.m3u8(?:[?#]|$)/i.test(url) ? "hls" : "direct",
+        }];
+      });
+    });
 
-    // This player intentionally accepts only direct/HLS media URLs; never an embed URL.
     for (const key of ["hlsProxyUrl", "m3u8", "hlsUrl", "streamUrl", "file", "url", "src"]) {
       const url = textValue(obj[key], "");
-      if (/^https?:\/\//i.test(url) && !/embed|iframe/i.test(key + " " + url) && !urls.some((source) => source.url === url)) {
+      if (url && isPlayableMedia(url, key) && !urls.some((source) => source.url === url)) {
         urls.unshift({
           name: textValue(obj.server, item.provider),
           url,
-          type: /m3u8|hls/i.test(key) || /\.m3u8(?:\?|$)/i.test(url) ? "hls" : textValue(obj.playbackMode, "direct"),
+          type: /m3u8|hls/i.test(key) || /\\.m3u8(?:[?#]|$)/i.test(url) ? "hls" : "direct",
         });
       }
     }
