@@ -151,6 +151,8 @@ export async function getEpisodes(idOrSlug: string): Promise<Episode[]> {
   const decoded = decodeURIComponent(idOrSlug).trim();
   const id = decoded.match(/-(\d+)$/)?.[1] || decoded;
   const paths = [
+    `/api/episode?malId=${encodeURIComponent(id)}`,
+    `/api/episodes?malId=${encodeURIComponent(id)}&source=animeheaven`,
     `/api/episodes?malId=${encodeURIComponent(id)}`,
     `/api/episodes?mal_id=${encodeURIComponent(id)}`,
     `/api/anime?malId=${encodeURIComponent(id)}`,
@@ -175,23 +177,35 @@ export async function getEpisodes(idOrSlug: string): Promise<Episode[]> {
   return [];
 }
 export async function getStream(idOrSlug: string, episode: string): Promise<{ sources: StreamSource[]; provider: string }> {
-  const id = encodeURIComponent(decodeURIComponent(idOrSlug).match(/-(\d+)$/)?.[1] || idOrSlug);
+  const decoded = decodeURIComponent(idOrSlug).trim();
+  const id = decoded.match(/-(\\d+)$/)?.[1] || decoded;
   const ep = encodeURIComponent(episode);
+  // AniVault's documented stream resolver is /api/watch/:source/:id/:ep/:type.
+  // Prefixing the ID with mal- explicitly tells it to resolve a MAL ID.
   const paths = [
-    { provider: "AnimeHeaven", path: `/api/animeheaven/stream?animeId=${id}&episode=${ep}` },
-    { provider: "AnimeHeaven", path: `/api/stream?animeId=${id}&episode=${ep}&provider=animeheaven` },
-    { provider: "AnimeHeaven", path: `/stream?animeId=${id}&episode=${ep}&provider=animeheaven` },
-    { provider: "Anikoto", path: `/api/anikoto/stream?animeId=${id}&episode=${ep}` },
-    { provider: "Anikoto", path: `/api/stream?animeId=${id}&episode=${ep}&provider=anikoto` }
+    { provider: "AnimeHeaven", path: `/api/watch/animeheaven/mal-${encodeURIComponent(id)}/${ep}/sub` },
+    { provider: "Anikoto", path: `/api/watch/anikoto/mal-${encodeURIComponent(id)}/${ep}/sub` },
+    { provider: "AnimeHeaven", path: `/api/watch?source=animeheaven&malId=${encodeURIComponent(id)}&ep=${ep}&type=sub` },
+    { provider: "Anikoto", path: `/api/watch?source=anikoto&malId=${encodeURIComponent(id)}&ep=${ep}&type=sub` },
   ];
   for (const item of paths) {
     const data = await request(item.path);
-    const obj = data && typeof data === "object" ? data as Record<string, unknown> : {};
+    if (!data || typeof data !== "object") continue;
+    const obj = data as Record<string, unknown>;
     const raw = records(data);
-    const urls = raw.map(v => ({ name: textValue(first(v, ["name", "server", "label"]), item.provider), url: textValue(first(v, ["url", "src", "file", "embed"]), ""), type: textValue(first(v, ["type"]), "embed") })).filter(v => /^https?:\/\//i.test(v.url));
-    const direct = textValue(first(obj, ["url", "src", "file", "embed", "streamUrl"]), "");
-    if (direct && /^https?:\/\//i.test(direct)) urls.unshift({ name: item.provider, url: direct, type: textValue(obj.type, "embed") });
-    if (urls.length) return { sources: urls, provider: item.provider };
+    const urls = raw.map((v) => ({
+      name: textValue(first(v, ["name", "server", "label"]), item.provider),
+      url: textValue(first(v, ["url", "src", "file", "embedUrl", "m3u8", "hlsProxyUrl"]), ""),
+      type: textValue(first(v, ["type", "playbackMode"]), "embed"),
+    })).filter((v) => /^https?:\\/\\//i.test(v.url));
+    for (const key of ["hlsProxyUrl", "m3u8", "embedUrl", "url", "src", "file", "streamUrl"]) {
+      const url = textValue(obj[key], "");
+      if (/^https?:\\/\\//i.test(url) && !urls.some((source) => source.url === url)) {
+        const type = key.toLowerCase().includes("m3u8") || key.toLowerCase().includes("hls") ? "hls" : key.toLowerCase().includes("embed") ? "embed" : textValue(obj.playbackMode, "direct");
+        urls.unshift({ name: item.provider, url, type });
+      }
+    }
+    if (urls.length) return { sources: urls, provider: textValue(obj.source, item.provider) };
   }
   return { sources: [], provider: "unavailable" };
 }
