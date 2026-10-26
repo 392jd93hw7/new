@@ -176,18 +176,22 @@ export async function getEpisodes(idOrSlug: string): Promise<Episode[]> {
   }
   return [];
 }
-export async function getStream(idOrSlug: string, episode: string): Promise<{ sources: StreamSource[]; provider: string }> {
+export async function getStream(
+  idOrSlug: string,
+  episode: string,
+  type: "sub" | "dub" | "raw" = "sub",
+  preferredServer?: string
+): Promise<{ sources: StreamSource[]; provider: string }> {
   const decoded = decodeURIComponent(idOrSlug).trim();
-  const id = decoded.match(/-(\\d+)$/)?.[1] || decoded;
+  const numericId = decoded.match(/-(\\d+)$/)?.[1];
+  const id = numericId ? `mal-${numericId}` : decoded;
   const ep = encodeURIComponent(episode);
-  // AniVault's documented stream resolver is /api/watch/:source/:id/:ep/:type.
-  // Prefixing the ID with mal- explicitly tells it to resolve a MAL ID.
+  const server = preferredServer ? `?server=${encodeURIComponent(preferredServer)}` : "";
   const paths = [
-    { provider: "AnimeHeaven", path: `/api/watch/animeheaven/mal-${encodeURIComponent(id)}/${ep}/sub` },
-    { provider: "Anikoto", path: `/api/watch/anikoto/mal-${encodeURIComponent(id)}/${ep}/sub` },
-    { provider: "AnimeHeaven", path: `/api/watch?source=animeheaven&malId=${encodeURIComponent(id)}&ep=${ep}&type=sub` },
-    { provider: "Anikoto", path: `/api/watch?source=anikoto&malId=${encodeURIComponent(id)}&ep=${ep}&type=sub` },
+    { provider: "AnimeHeaven", path: `/api/watch/animeheaven/${encodeURIComponent(id)}/${ep}/${type}${server}` },
+    { provider: "Anikoto", path: `/api/watch/anikoto/${encodeURIComponent(id)}/${ep}/${type}${server}` },
   ];
+
   for (const item of paths) {
     const data = await request(item.path);
     if (!data || typeof data !== "object") continue;
@@ -195,14 +199,19 @@ export async function getStream(idOrSlug: string, episode: string): Promise<{ so
     const raw = records(data);
     const urls = raw.map((v) => ({
       name: textValue(first(v, ["name", "server", "label"]), item.provider),
-      url: textValue(first(v, ["url", "src", "file", "embedUrl", "m3u8", "hlsProxyUrl"]), ""),
-      type: textValue(first(v, ["type", "playbackMode"]), "embed"),
-    })).filter((v) => /^https?:\/\//i.test(v.url));
-    for (const key of ["hlsProxyUrl", "m3u8", "embedUrl", "url", "src", "file", "streamUrl"]) {
+      url: textValue(first(v, ["hlsProxyUrl", "m3u8", "hlsUrl", "url", "src", "file", "streamUrl"]), ""),
+      type: textValue(first(v, ["type", "playbackMode"]), "hls"),
+    })).filter((v) => /^https?:\/\//i.test(v.url) && !/embed/i.test(v.type) && !/embed|iframe/i.test(v.url));
+
+    // This player intentionally accepts only direct/HLS media URLs; never an embed URL.
+    for (const key of ["hlsProxyUrl", "m3u8", "hlsUrl", "streamUrl", "file", "url", "src"]) {
       const url = textValue(obj[key], "");
-      if (/^https?:\/\//i.test(url) && !urls.some((source) => source.url === url)) {
-        const type = key.toLowerCase().includes("m3u8") || key.toLowerCase().includes("hls") ? "hls" : key.toLowerCase().includes("embed") ? "embed" : textValue(obj.playbackMode, "direct");
-        urls.unshift({ name: item.provider, url, type });
+      if (/^https?:\/\//i.test(url) && !/embed|iframe/i.test(key + " " + url) && !urls.some((source) => source.url === url)) {
+        urls.unshift({
+          name: textValue(obj.server, item.provider),
+          url,
+          type: /m3u8|hls/i.test(key) || /\.m3u8(?:\?|$)/i.test(url) ? "hls" : textValue(obj.playbackMode, "direct"),
+        });
       }
     }
     if (urls.length) return { sources: urls, provider: textValue(obj.source, item.provider) };
