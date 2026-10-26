@@ -1,0 +1,1 @@
+import type {MetadataRoute} from "next";export default function manifest():MetadataRoute.Manifest{return {name:"AnimeHeaven",short_name:"AnimeHeaven",description:"Discover your next anime.",start_url:"/",display:"standalone",background_color:"#090b14",theme_color:"#090b14",icons:[]};}

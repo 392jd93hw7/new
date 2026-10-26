@@ -1,0 +1,2 @@
+import {NextRequest,NextResponse} from "next/server";import {getStream} from "@/lib/api";
+export async function GET(request:NextRequest){const anime=request.nextUrl.searchParams.get("anime");const episode=request.nextUrl.searchParams.get("episode");if(!anime||!episode)return NextResponse.json({error:"anime and episode are required"}, {status:400});const data=await getStream(anime,episode);return NextResponse.json(data,{headers:{"Cache-Control":"no-store"}});}

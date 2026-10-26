@@ -1,0 +1,1 @@
+import Link from "next/link";export default function NotFound(){return <div className="page-shell simple-page"><p className="eyebrow">404 · LOST IN ANOTHER WORLD</p><h1>That page vanished.</h1><p className="page-intro">The page may have moved, or the anime may not be available in the current catalog.</p><Link className="button-primary" href="/">Return home ↗</Link></div>}

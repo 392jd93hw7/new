@@ -1,0 +1,1 @@
+"use client";export default function Error({reset}:{error:Error&{digest?:string};reset:()=>void}){return <div className="page-shell simple-page"><div className="error-box"><h2>Something went wrong</h2><p>Try again. If this keeps happening, check the API connection and server logs.</p><button className="button-primary" onClick={()=>reset()}>Try again</button></div></div>}
