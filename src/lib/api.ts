@@ -197,10 +197,10 @@ export async function getStream(idOrSlug: string, episode: string): Promise<{ so
       name: textValue(first(v, ["name", "server", "label"]), item.provider),
       url: textValue(first(v, ["url", "src", "file", "embedUrl", "m3u8", "hlsProxyUrl"]), ""),
       type: textValue(first(v, ["type", "playbackMode"]), "embed"),
-    })).filter((v) => /^https?:\\/\\//i.test(v.url));
+    })).filter((v) => /^https?:\/\//i.test(v.url));
     for (const key of ["hlsProxyUrl", "m3u8", "embedUrl", "url", "src", "file", "streamUrl"]) {
       const url = textValue(obj[key], "");
-      if (/^https?:\\/\\//i.test(url) && !urls.some((source) => source.url === url)) {
+      if (/^https?:\/\//i.test(url) && !urls.some((source) => source.url === url)) {
         const type = key.toLowerCase().includes("m3u8") || key.toLowerCase().includes("hls") ? "hls" : key.toLowerCase().includes("embed") ? "embed" : textValue(obj.playbackMode, "direct");
         urls.unshift({ name: item.provider, url, type });
       }
